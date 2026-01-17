@@ -1,0 +1,8 @@
+{
+  "id": "context:node-typescript",
+  "description": "Node.js + TypeScript project context",
+  "enable": {
+    "rules": ["rule:testing"],
+    "skills": ["skill:fs-read", "skill:fs-write"]
+  }
+}

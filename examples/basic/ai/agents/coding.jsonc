@@ -1,0 +1,22 @@
+{
+  "id": "agent:coding",
+  "instructions": "You are a helpful coding assistant. Follow project conventions and best practices.",
+  "rules": [
+    "rule:code-style",
+    "rule:testing"
+  ],
+  "skills": [
+    "skill:fs-read",
+    "skill:fs-write"
+  ],
+  "variants": [
+    {
+      "when": { "modelFamily": "anthropic:*" },
+      "append": "Be concise. Prefer showing code over lengthy explanations."
+    },
+    {
+      "when": { "modelFamily": "openai:*" },
+      "append": "Use function calling when appropriate for structured outputs."
+    }
+  ]
+}

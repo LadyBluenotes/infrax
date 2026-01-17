@@ -1,0 +1,5 @@
+{
+  "id": "skill:fs-read",
+  "grants": ["fs:read"],
+  "requiresMcpServers": ["mcp:filesystem"]
+}

@@ -1,0 +1,5 @@
+{
+  "id": "skill:fs-write",
+  "grants": ["fs:write"],
+  "requiresMcpServers": ["mcp:filesystem"]
+}

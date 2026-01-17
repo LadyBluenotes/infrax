@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.idea
+
+# Generated exports (optional - you may want to commit these)
+# .cursor/rules/
+# .github/copilot-instructions.md
+# CLAUDE.md
+# .vscode/mcp.json
