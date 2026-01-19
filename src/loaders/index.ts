@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import matter from "gray-matter";
+
+export { loadRootConfig } from "./config.js";
 import type {
   RootConfig,
   PresetManifest,
@@ -21,28 +23,10 @@ import {
   listFiles,
 } from "../utils/index.js";
 
-const CONFIG_FILES = ["ai.config.jsonc", "ai.config.json"];
+
 const PRESET_FILES = ["ai.preset.jsonc", "ai.preset.json"];
 
-/**
- * Load the root configuration from a repo.
- */
-export function loadRootConfig(repoRoot: string): RootConfig {
-  for (const configFile of CONFIG_FILES) {
-    const configPath = path.join(repoRoot, configFile);
-    if (fileExists(configPath)) {
-      const config = readJsoncFile<RootConfig>(configPath);
-      return {
-        ...config,
-        version: 1,
-      };
-    }
-  }
 
-  throw new Error(
-    `No configuration file found. Expected one of: ${CONFIG_FILES.join(", ")}`
-  );
-}
 
 /**
  * Resolve a preset reference to a path.
