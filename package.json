@@ -42,9 +42,13 @@
     "node": ">=20"
   },
   "dependencies": {
+    "commander": "^14.0.1",
     "gray-matter": "^4.0.3",
-    "jsonc-parser": "^3.3.1"
+    "jsonc-parser": "^3.3.1",
+    "yaml": "^2.8.0",
+    "zod": "^4.1.11"
   },
+
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@types/node": "^22.10.0",

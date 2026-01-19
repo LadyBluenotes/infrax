@@ -1,33 +1,14 @@
-import { resolveConfig } from "../../resolver/index.js";
-import { formatError } from "./shared.js";
-import { buildCliOverlayFromMcpFlags } from "./mcp-flags.js";
+import { mergeConfigs } from "../../config/index.js";
+import { loadConfigOrEmpty, resolveConfigPaths } from "./context.js";
 
-export function runResolve(args: {
-  parsed: { flags: Record<string, unknown> };
-  repoRoot: string;
-  model?: string;
-  context?: string;
-}): void {
-  const overlayResult = buildCliOverlayFromMcpFlags(args.parsed);
-  if (!overlayResult.ok) {
-    console.error(formatError(overlayResult.error));
-    process.exit(1);
-  }
-
-  const resolved = resolveConfig({
-    repoRoot: args.repoRoot,
-    model: args.model,
-    context: args.context as `context:${string}` | undefined,
-    cliOverlay: overlayResult.cliOverlay,
-  });
-
-  if (resolved.trace.errors.length > 0) {
-    console.error(formatError("Resolution failed"));
-    for (const err of resolved.trace.errors) {
-      console.error(`  - ${err}`);
-    }
-    process.exit(1);
-  }
-
-  console.log(JSON.stringify(resolved, null, 2));
+export function registerResolveCommand(program: import("commander").Command): void {
+  program
+    .command("resolve")
+    .description("Resolve config for debug")
+    .option("--config <path>", "Config file override")
+    .action((options: { config?: string }) => {
+      const paths = resolveConfigPaths(options.config);
+      const merged = mergeConfigs(loadConfigOrEmpty(paths.global), loadConfigOrEmpty(paths.project));
+      console.log(JSON.stringify(merged.mergedConfig, null, 2));
+    });
 }

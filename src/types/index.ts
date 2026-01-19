@@ -2,6 +2,10 @@
  * Core type definitions for the infrax configuration system.
  */
 
+export type ScopeLevel = "global" | "project";
+export type ConfigVersion = 1;
+
+
 // -----------------------------------------------------------------------------
 // Identifiers
 // -----------------------------------------------------------------------------
@@ -15,8 +19,77 @@ export type ModelId = string; // e.g., "anthropic:claude-3.5-sonnet", "openai:gp
 export type PresetId = `preset:${string}`;
 
 // -----------------------------------------------------------------------------
+// Simple config entities (MVP config.jsonc)
+// -----------------------------------------------------------------------------
+
+export interface ContextInfo {
+  frameworks?: string[];
+  languages?: string[];
+  model?: ModelId;
+}
+
+export interface ProjectInfo {
+  name?: string;
+  root?: string;
+  context?: ContextInfo;
+}
+
+export interface ConfigRule {
+  id: string;
+  enabled?: boolean;
+  source?: "builtin" | "custom";
+}
+
+export interface ConfigSkill {
+  id: string;
+  enabled?: boolean;
+  scope?: ScopeLevel;
+}
+
+export interface ConfigMcpServer {
+  id: string;
+  enabled?: boolean;
+  scope?: ScopeLevel;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  version?: string;
+}
+
+export interface ConfigAgent {
+  id: string;
+  model?: ModelId;
+  skills?: string[];
+  rules?: string[];
+}
+
+export interface ConfigDefinition {
+  version: ConfigVersion;
+  project?: ProjectInfo;
+  mcpServers?: ConfigMcpServer[];
+  rules?: ConfigRule[];
+  skills?: ConfigSkill[];
+  agents?: ConfigAgent[];
+}
+
+export interface Conflict {
+  type: "rule" | "skill" | "mcp" | "config" | "agent";
+  id: string;
+  scope: ScopeLevel;
+  message: string;
+  resolution?: "prefer-global" | "prefer-local" | "manual";
+}
+
+export interface MergeResult {
+  mergedConfig: ConfigDefinition;
+  conflicts: Conflict[];
+  warnings: string[];
+}
+
+// -----------------------------------------------------------------------------
 // Selectors (for model/context gating)
 // -----------------------------------------------------------------------------
+
 
 export interface Selectors {
   /** Model patterns (glob-like, e.g., "anthropic:*", "openai:gpt-4*") */

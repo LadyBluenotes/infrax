@@ -35,7 +35,17 @@ export type {
   ActivationTraceEntry,
   ResolveInput,
   ExportResult,
+  ConfigDefinition,
+  ConfigRule,
+  ConfigSkill,
+  ConfigMcpServer,
+  ConfigAgent,
+  ContextInfo,
+  ProjectInfo,
+  MergeResult,
+  Conflict,
 } from "./types/index.js";
+
 
 // Loaders
 export {
@@ -47,7 +57,7 @@ export {
 } from "./loaders/index.js";
 
 // Resolver
-export { resolveConfig, explainResolution } from "./resolver/index.js";
+export { resolveConfig, explainResolution } from "./resolver/resolver.js";
 
 // Exporters
 export {
@@ -58,9 +68,32 @@ export {
   exportMcp,
 } from "./exporters/index.js";
 
+// Config helpers
+export {
+  createEmptyConfig,
+  parseConfigDefinition,
+  configSchema,
+  loadConfig,
+  saveConfig,
+  ensureConfigExists,
+  mergeConfigs,
+  detectContext,
+  addConfigItem,
+  toggleItem,
+  validateConfig,
+  renderAgentsMdBlock,
+  updateAgentsMdFile,
+  resolveAgentsMdPath,
+} from "./config/index.js";
+
 // Utils (selective)
 export {
   expandVariables,
   matchPattern,
   simpleHash,
+  readJsoncDocument,
+  applyJsoncEdits,
+  setJsoncValue,
+  removeJsoncValue,
 } from "./utils/index.js";
+

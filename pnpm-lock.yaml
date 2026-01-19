@@ -8,12 +8,21 @@ importers:
 
   .:
     dependencies:
+      commander:
+        specifier: ^14.0.1
+        version: 14.0.2
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1
+      yaml:
+        specifier: ^2.8.0
+        version: 2.8.2
+      zod:
+        specifier: ^4.1.11
+        version: 4.3.5
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0
@@ -33,14 +42,6 @@ importers:
       typescript-eslint:
         specifier: ^8.19.0
         version: 8.53.0(eslint@9.39.2)(typescript@5.9.3)
-
-  examples/with-preset:
-    dependencies:
-      '@infrax/preset-base':
-        specifier: workspace:*
-        version: link:../../presets/infrax-preset-base
-
-  presets/infrax-preset-base: {}
 
 packages:
 
@@ -368,6 +369,10 @@ packages:
 
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
+
+  commander@14.0.2:
+    resolution: {integrity: sha512-TywoWNNRbhoD0BXs1P3ZEScW8W5iKrnbithIl0YH+uCmBd0QpPOA8yc82DS3BIE5Ma6FnBVUsJ7wVUDz4dvOWQ==}
+    engines: {node: '>=20'}
 
   concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
@@ -708,9 +713,17 @@ packages:
     resolution: {integrity: sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==}
     engines: {node: '>=0.10.0'}
 
+  yaml@2.8.2:
+    resolution: {integrity: sha512-mplynKqc1C2hTVYxd0PU2xQAc22TI1vShAYGksCCfxbn/dFwnHTNi1bvYsBTkhdUNtGIf5xNOg938rrSSYvS9A==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
+
+  zod@4.3.5:
+    resolution: {integrity: sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g==}
 
 snapshots:
 
@@ -994,6 +1007,8 @@ snapshots:
       color-name: 1.1.4
 
   color-name@1.1.4: {}
+
+  commander@14.0.2: {}
 
   concat-map@0.0.1: {}
 
@@ -1330,4 +1345,8 @@ snapshots:
 
   word-wrap@1.2.5: {}
 
+  yaml@2.8.2: {}
+
   yocto-queue@0.1.0: {}
+
+  zod@4.3.5: {}

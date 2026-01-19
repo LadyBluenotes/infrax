@@ -1,6 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as jsonc from "jsonc-parser";
+export { applyJsoncEdits, readJsoncDocument, removeJsoncValue, setJsoncValue } from "./jsonc.js";
+export { getGlobalConfigPath, getProjectConfigPath, normalizeConfigPath } from "./paths.js";
+
 
 /**
  * Read and parse a JSONC file.
@@ -22,6 +25,13 @@ export function readJsoncFile<T>(filePath: string): T {
 
   return result as T;
 }
+
+export function formatJsoncParseErrors(errors: jsonc.ParseError[]): string {
+  return errors
+    .map((e) => `${jsonc.printParseErrorCode(e.error)} at offset ${e.offset}`)
+    .join(", ");
+}
+
 
 /**
  * Check if a file exists.
