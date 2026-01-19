@@ -1,8 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://switchboard.dev/schemas/ai.config.schema.json",
-  "title": "Switchboard AI Configuration",
-  "description": "Configuration schema for switchboard - portable, model-aware AI configuration",
+  "title": "Infrax AI Configuration",
+  "description": "Configuration schema for infrax - portable, model-aware AI configuration",
   "type": "object",
   "properties": {
     "version": {

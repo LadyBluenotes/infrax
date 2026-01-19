@@ -1,5 +1,5 @@
 /**
- * Core type definitions for the switchboard configuration system.
+ * Core type definitions for the infrax configuration system.
  */
 
 // -----------------------------------------------------------------------------

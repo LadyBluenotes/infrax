@@ -1,7 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://switchboard.dev/schemas/mcp.schema.json",
-  "title": "Switchboard MCP Server Definition",
+  "title": "Infrax MCP Server Definition",
   "description": "Schema for MCP server definition files",
   "type": "object",
   "properties": {

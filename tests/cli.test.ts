@@ -19,7 +19,7 @@ function runCli(
   cwd: string
 ): { stdout: string; stderr: string; exitCode: number } {
   try {
-    const stdout = execSync(`node ${CLI_PATH} ${args.join(" ")}`, {
+    const stdout = execSync(`node ${CLI_PATH} ${args.map((a) => JSON.stringify(a)).join(" ")}`, {
       cwd,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
@@ -35,11 +35,11 @@ function runCli(
   }
 }
 
-describe("CLI", () => {
+describe("CLI (infrax)", () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "switchboard-cli-test-"));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "infrax-cli-test-"));
   });
 
   afterEach(() => {
@@ -49,18 +49,18 @@ describe("CLI", () => {
   describe("help", () => {
     it("shows help with no arguments", () => {
       const { stdout } = runCli([], tempDir);
-      assert.ok(stdout.includes("switchboard"));
+      assert.ok(stdout.includes("infrax"));
       assert.ok(stdout.includes("COMMANDS"));
     });
 
     it("shows help with --help flag", () => {
       const { stdout } = runCli(["--help"], tempDir);
-      assert.ok(stdout.includes("switchboard"));
+      assert.ok(stdout.includes("infrax"));
     });
 
     it("shows help with help command", () => {
       const { stdout } = runCli(["help"], tempDir);
-      assert.ok(stdout.includes("switchboard"));
+      assert.ok(stdout.includes("infrax"));
     });
   });
 

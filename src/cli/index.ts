@@ -7,6 +7,12 @@ import { resolveConfig, explainResolution } from "../resolver/index.js";
 import { exportConfig, exportMcp } from "../exporters/index.js";
 import { loadRootConfig, loadFullRegistry } from "../loaders/index.js";
 import { importAgentsMd } from "../loaders/agents-md.js";
+import {
+  parseMcpFlagValues,
+  resolveMcpRef,
+  getMcpCatalogEntries,
+  MCP_CATALOG,
+} from "../mcp/catalog.js";
 import type {
   ExportTarget,
   McpExportTarget,
@@ -31,12 +37,60 @@ const colors = {
   bold: "\x1b[1m",
 };
 
+function sketchMcpServer(repoRoot: string, alias: string): string {
+  const entry = MCP_CATALOG[alias];
+  const filePath = path.join(repoRoot, "ai", "mcp", `${alias}.jsonc`);
+  ensureDirectory(filePath);
+  fs.writeFileSync(filePath, JSON.stringify(entry.template, null, 2));
+  return filePath;
+}
+
+function buildCliOverlayFromMcpFlags(parsed: { flags: Record<string, unknown> }):
+  | {
+      ok: true;
+      cliOverlay?: { enable?: EnableDisableSet; disable?: EnableDisableSet };
+      requestedAliases: string[];
+    }
+  | { ok: false; error: string } {
+  const mcpNone = parsed.flags["mcp-none"] === true;
+  const mcpRefs = parseMcpFlagValues(parsed.flags.mcp);
+
+  if (mcpRefs.length === 0 && !mcpNone) {
+    return { ok: true, cliOverlay: undefined, requestedAliases: [] };
+  }
+
+  if (mcpNone) {
+    return {
+      ok: true,
+      cliOverlay: { enable: { mcpServers: [] } },
+      requestedAliases: [],
+    };
+  }
+
+  const ids: McpServerId[] = [];
+  const aliases: string[] = [];
+
+  for (const ref of mcpRefs) {
+    const resolved = resolveMcpRef(ref);
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    ids.push(resolved.id);
+    if (resolved.alias) aliases.push(resolved.alias);
+  }
+
+  return {
+    ok: true,
+    cliOverlay: { enable: { mcpServers: ids } },
+    requestedAliases: aliases,
+  };
+}
+
 function printHelp() {
   console.log(`
-${colors.bold}switchboard v${VERSION}${colors.reset} - Portable, model-aware AI configuration
+${colors.bold}infrax v${VERSION}${colors.reset} - Portable, model-aware AI configuration
+
 
 ${colors.bold}USAGE:${colors.reset}
-  switchboard <command> [options]
+  infrax <command> [options]
 
 ${colors.bold}COMMANDS:${colors.reset}
   init                 Initialize a new ai.config.jsonc in current directory
@@ -57,33 +111,38 @@ ${colors.bold}OPTIONS:${colors.reset}
   --user               Target user-level config (for MCP exports)
   --force              Required with --user --write for safety
   --target <client>    MCP client target (vscode, cursor, claude-desktop, amazonq)
+  --mcp <name>         Enable MCP server by alias (e.g. filesystem) or id (mcp:foo); repeatable; supports comma-separated
+  --mcp-none           Disable all MCP servers for this run (overrides config)
+  --catalog            With 'list mcp': show built-in MCP catalog aliases
   --all                Show all items (not just active)
   --json               Output as JSON
   --exports            Check that generated exports match committed files
 
 ${colors.bold}EXAMPLES:${colors.reset}
-  switchboard init
-  switchboard resolve --model anthropic:claude-3.5-sonnet
-  switchboard list rules --all
-  switchboard enable rule:testing --write
-  switchboard export cursor --write
-  switchboard export all --write
-  switchboard export mcp --target vscode --write
-  switchboard export mcp --target claude-desktop --user --write --force
-  switchboard check --exports
-  switchboard drift
+  infrax init
+  infrax resolve --model anthropic:claude-3.5-sonnet
+  infrax list rules --all
+  infrax enable rule:testing --write
+  infrax export cursor --write
+  infrax export all --write
+  infrax export mcp --target vscode --write
+  infrax export mcp --target claude-desktop --user --write --force
+  infrax export mcp --target vscode --mcp filesystem --mcp github --write
+  infrax list mcp --catalog
+  infrax check --exports
+  infrax drift
 `);
 }
 
 function parseArgs(args: string[]): {
   command: string;
   positional: string[];
-  flags: Record<string, string | boolean>;
+  flags: Record<string, string | boolean | string[]>;
 } {
   const result = {
     command: "",
     positional: [] as string[],
-    flags: {} as Record<string, string | boolean>,
+    flags: {} as Record<string, string | boolean | string[]>,
   };
 
   let i = 0;
@@ -102,7 +161,16 @@ function parseArgs(args: string[]): {
       const nextArg = args[i + 1];
 
       if (nextArg && !nextArg.startsWith("-")) {
-        result.flags[key] = nextArg;
+        const val = nextArg;
+        const existing = result.flags[key];
+        if (existing === undefined) {
+          result.flags[key] = val;
+        } else if (Array.isArray(existing)) {
+          existing.push(val);
+          result.flags[key] = existing;
+        } else {
+          result.flags[key] = [String(existing), val];
+        }
         i += 2;
       } else {
         result.flags[key] = true;
@@ -301,7 +369,7 @@ function showDrift(repoRoot: string, model?: string, context?: string): void {
 
     if (!fs.existsSync(fullPath)) {
       console.log(`\n${colors.yellow}MISSING:${colors.reset} ${result.filePath}`);
-      console.log(`${colors.dim}  File does not exist. Run 'switchboard export' to create.${colors.reset}`);
+      console.log(`${colors.dim}  File does not exist. Run 'infrax export' to create.${colors.reset}`);
       hasDrift = true;
       continue;
     }
@@ -384,7 +452,7 @@ async function runInit(repoRoot: string): Promise<void> {
   const question = (prompt: string): Promise<string> =>
     new Promise((resolve) => rl.question(prompt, resolve));
 
-  console.log(`\n${colors.bold}switchboard init${colors.reset}\n`);
+  console.log(`\n${colors.bold}infrax init${colors.reset}\n`);
   console.log("This will create a new ai.config.jsonc and example files.\n");
 
   const projectName = await question("Project name (for context): ");
@@ -505,8 +573,8 @@ ${useTypeScript ? "- Use TypeScript for all new code\n" : ""}- Write clean, read
   console.log(`
 ${colors.bold}Next steps:${colors.reset}
   1. Edit ai/rules/*.md to add your project rules
-  2. Run ${colors.blue}switchboard check${colors.reset} to validate
-  3. Run ${colors.blue}switchboard export all --write${colors.reset} to generate tool configs
+  2. Run ${colors.blue}infrax check${colors.reset} to validate
+  3. Run ${colors.blue}infrax export all --write${colors.reset} to generate tool configs
   4. Commit the generated files to your repo
 `);
 }
@@ -542,10 +610,17 @@ async function main() {
       }
 
       case "resolve": {
+        const overlayResult = buildCliOverlayFromMcpFlags(parsed as { flags: Record<string, unknown> });
+        if (!overlayResult.ok) {
+          console.error(formatError(overlayResult.error));
+          process.exit(1);
+        }
+
         const resolved = resolveConfig({
           repoRoot,
           model,
           context: context as `context:${string}` | undefined,
+          cliOverlay: overlayResult.cliOverlay,
         });
 
         if (resolved.trace.errors.length > 0) {
@@ -560,12 +635,27 @@ async function main() {
         break;
       }
 
-      case "list": {
-        const type = parsed.positional[0];
+       case "list": {
+         if (parsed.positional[0] === "mcp" && parsed.flags.catalog === true) {
+           const entries = getMcpCatalogEntries();
+           if (json) {
+             console.log(JSON.stringify(entries, null, 2));
+           } else {
+             console.log(`\n${colors.bold}MCP CATALOG${colors.reset}\n`);
+             for (const entry of entries) {
+               console.log(`  ${entry.alias} ${colors.dim}-> ${entry.id}${colors.reset}`);
+               console.log(`    ${colors.dim}${entry.description}${colors.reset}`);
+             }
+             console.log("");
+           }
+           break;
+         }
+
+         const type = parsed.positional[0];
         if (!type || !["rules", "agents", "skills", "mcp"].includes(type)) {
           console.error(formatError(
             "Invalid list type",
-            "Usage: switchboard list <rules|agents|skills|mcp>"
+            "Usage: infrax list <rules|agents|skills|mcp>"
           ));
           process.exit(1);
         }
@@ -650,7 +740,7 @@ async function main() {
         if (!id) {
           console.error(formatError(
             "Missing item ID",
-            `Usage: switchboard ${parsed.command} <rule:id|agent:id|skill:id|mcp:id>`
+            `Usage: infrax ${parsed.command} <rule:id|agent:id|skill:id|mcp:id>`
           ));
           process.exit(1);
         }
@@ -755,8 +845,32 @@ async function main() {
         break;
       }
 
-      case "export": {
-        const target = parsed.positional[0] as ExportTarget | "mcp" | "all";
+       case "export": {
+         const target = parsed.positional[0] as ExportTarget | "mcp" | "all";
+
+         const overlayResult = buildCliOverlayFromMcpFlags(parsed as { flags: Record<string, unknown> });
+         if (!overlayResult.ok) {
+           console.error(formatError(overlayResult.error));
+           process.exit(1);
+         }
+
+         const requestedAliases = overlayResult.requestedAliases;
+
+         // If MCP aliases were requested and we're writing, scaffold missing definitions into ai/mcp/.
+         if (write && requestedAliases.length > 0) {
+           const rootConfig = loadRootConfig(repoRoot);
+           const { registry } = loadFullRegistry(repoRoot, rootConfig);
+
+           for (const alias of requestedAliases) {
+             const id = MCP_CATALOG[alias]?.id;
+             if (!id) continue;
+             if (!registry.mcpServers.has(id)) {
+               const createdPath = sketchMcpServer(repoRoot, alias);
+               console.log(formatSuccess(`Created ${createdPath}`));
+             }
+           }
+         }
+
 
         if (
           !target ||
@@ -764,7 +878,7 @@ async function main() {
         ) {
           console.error(formatError(
             "Invalid export target",
-            "Usage: switchboard export <cursor|copilot|claude|mcp|all> [--write]"
+            "Usage: infrax export <cursor|copilot|claude|mcp|all> [--write]"
           ));
           process.exit(1);
         }
@@ -773,6 +887,7 @@ async function main() {
           repoRoot,
           model,
           context: context as `context:${string}` | undefined,
+          cliOverlay: overlayResult.cliOverlay,
         });
 
         if (resolved.trace.errors.length > 0) {
@@ -793,7 +908,7 @@ async function main() {
           if (userLevel && write && !force) {
             console.error(formatError(
               "User-level writes require explicit confirmation",
-              "Add --force to confirm: switchboard export mcp --target claude-desktop --user --write --force"
+              "Add --force to confirm: infrax export mcp --target claude-desktop --user --write --force"
             ));
             process.exit(1);
           }
@@ -938,7 +1053,7 @@ async function main() {
 
           if (missing.length > 0) {
             for (const file of missing) {
-              console.log(formatWarning(`${file} is missing (run 'switchboard export' to create)`));
+              console.log(formatWarning(`${file} is missing (run 'infrax export' to create)`));
             }
           }
 
@@ -949,7 +1064,7 @@ async function main() {
           }
 
           if (mismatches.length > 0) {
-            console.error(`\n${formatError("Exports are out of sync", "Run 'switchboard export all --write' to update")}`);
+            console.error(`\n${formatError("Exports are out of sync", "Run 'infrax export all --write' to update")}`);
             process.exit(1);
           }
         }
@@ -967,7 +1082,7 @@ async function main() {
       default:
         console.error(formatError(
           `Unknown command: "${parsed.command}"`,
-          "Run 'switchboard help' for available commands"
+          "Run 'infrax help' for available commands"
         ));
         process.exit(1);
     }
@@ -977,7 +1092,7 @@ async function main() {
     // Provide helpful hints based on error type
     let hint: string | undefined;
     if (message.includes("No configuration file found")) {
-      hint = "Run 'switchboard init' to create a new configuration";
+      hint = "Run 'infrax init' to create a new configuration";
     } else if (message.includes("not found in registry")) {
       hint = "Check that the ID is correct and the file exists in ai/";
     } else if (message.includes("Failed to resolve preset")) {

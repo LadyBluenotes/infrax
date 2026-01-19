@@ -1,8 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://switchboard.dev/schemas/ai.preset.schema.json",
-  "title": "Switchboard Preset Manifest",
-  "description": "Manifest schema for switchboard presets",
+  "title": "Infrax Preset Manifest",
+  "description": "Manifest schema for infrax presets",
   "type": "object",
   "properties": {
     "presetVersion": {

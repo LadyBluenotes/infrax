@@ -36,11 +36,11 @@ importers:
 
   examples/with-preset:
     dependencies:
-      '@switchboard/preset-base':
+      '@infrax/preset-base':
         specifier: workspace:*
-        version: link:../../presets/switchboard-preset-base
+        version: link:../../presets/infrax-preset-base
 
-  presets/switchboard-preset-base: {}
+  presets/infrax-preset-base: {}
 
 packages:
 

@@ -1,5 +1,5 @@
 /**
- * switchboard - Portable, model-aware AI configuration
+ * infrax - Portable, model-aware AI configuration
  */
 
 // Types
