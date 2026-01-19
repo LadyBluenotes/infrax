@@ -1,7 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://switchboard.dev/schemas/agent.schema.json",
-  "title": "Switchboard Agent Definition",
+  "title": "Infrax Agent Definition",
   "description": "Schema for agent definition files",
   "type": "object",
   "properties": {

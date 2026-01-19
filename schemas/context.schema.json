@@ -1,7 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://switchboard.dev/schemas/context.schema.json",
-  "title": "Switchboard Context Definition",
+  "title": "Infrax Context Definition",
   "description": "Schema for context definition files (project profiles)",
   "type": "object",
   "properties": {

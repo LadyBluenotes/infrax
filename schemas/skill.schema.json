@@ -1,7 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://switchboard.dev/schemas/skill.schema.json",
-  "title": "Switchboard Skill Definition",
+  "title": "Infrax Skill Definition",
   "description": "Schema for skill definition files",
   "type": "object",
   "properties": {
