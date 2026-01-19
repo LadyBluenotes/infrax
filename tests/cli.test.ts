@@ -83,7 +83,11 @@ describe("CLI (infrax)", () => {
           mcpServers: [],
         },
       };
-      fs.writeFileSync(path.join(tempDir, "ai.config.jsonc"), JSON.stringify(config));
+      fs.mkdirSync(path.join(tempDir, ".ai"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, ".ai", "config.jsonc"),
+        JSON.stringify(config)
+      );
 
       const { stdout, exitCode } = runCli(["check"], tempDir);
 
@@ -93,7 +97,11 @@ describe("CLI (infrax)", () => {
 
     it("reports errors for invalid configuration", () => {
       const config = { version: 999 };
-      fs.writeFileSync(path.join(tempDir, "ai.config.jsonc"), JSON.stringify(config));
+      fs.mkdirSync(path.join(tempDir, ".ai"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, ".ai", "config.jsonc"),
+        JSON.stringify(config)
+      );
 
       const { exitCode } = runCli(["check"], tempDir);
       assert.ok(exitCode === 0 || exitCode === 1);
@@ -111,7 +119,11 @@ describe("CLI (infrax)", () => {
           mcpServers: [],
         },
       };
-      fs.writeFileSync(path.join(tempDir, "ai.config.jsonc"), JSON.stringify(config));
+      fs.mkdirSync(path.join(tempDir, ".ai"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, ".ai", "config.jsonc"),
+        JSON.stringify(config)
+      );
 
       const { stdout, exitCode } = runCli(["resolve"], tempDir);
 
@@ -127,14 +139,18 @@ describe("CLI (infrax)", () => {
     it("lists rules", () => {
       const config = {
         version: 1,
-        include: { rulesDir: "ai/rules" },
+        include: { rulesDir: ".ai/rules" },
         enable: { rules: ["rule:test"] },
       };
-      fs.writeFileSync(path.join(tempDir, "ai.config.jsonc"), JSON.stringify(config));
-
-      fs.mkdirSync(path.join(tempDir, "ai", "rules"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, ".ai"), { recursive: true });
       fs.writeFileSync(
-        path.join(tempDir, "ai", "rules", "test.md"),
+        path.join(tempDir, ".ai", "config.jsonc"),
+        JSON.stringify(config)
+      );
+
+      fs.mkdirSync(path.join(tempDir, ".ai", "rules"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, ".ai", "rules", "test.md"),
         "---\nid: rule:test\n---\n\nTest rule content"
       );
 
@@ -145,7 +161,11 @@ describe("CLI (infrax)", () => {
     });
 
     it("shows error for invalid list type", () => {
-      fs.writeFileSync(path.join(tempDir, "ai.config.jsonc"), JSON.stringify({ version: 1 }));
+      fs.mkdirSync(path.join(tempDir, ".ai"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, ".ai", "config.jsonc"),
+        JSON.stringify({ version: 1 })
+      );
 
       const { stderr, exitCode } = runCli(["list", "invalid"], tempDir);
 
@@ -158,16 +178,20 @@ describe("CLI (infrax)", () => {
     beforeEach(() => {
       const config = {
         version: 1,
-        include: { rulesDir: "ai/rules" },
+        include: { rulesDir: ".ai/rules" },
         enable: {
           rules: ["rule:code-style"],
         },
       };
-      fs.writeFileSync(path.join(tempDir, "ai.config.jsonc"), JSON.stringify(config));
-
-      fs.mkdirSync(path.join(tempDir, "ai", "rules"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, ".ai"), { recursive: true });
       fs.writeFileSync(
-        path.join(tempDir, "ai", "rules", "code-style.md"),
+        path.join(tempDir, ".ai", "config.jsonc"),
+        JSON.stringify(config)
+      );
+
+      fs.mkdirSync(path.join(tempDir, ".ai", "rules"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, ".ai", "rules", "code-style.md"),
         "---\nid: rule:code-style\ntargets: [cursor, copilot, claude]\n---\n\n## Code Style\n\nUse TypeScript."
       );
     });
@@ -237,7 +261,11 @@ describe("CLI (infrax)", () => {
           rules: [],
         },
       };
-      fs.writeFileSync(path.join(tempDir, "ai.config.jsonc"), JSON.stringify(config));
+      fs.mkdirSync(path.join(tempDir, ".ai"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, ".ai", "config.jsonc"),
+        JSON.stringify(config)
+      );
     });
 
     it("enables item ephemerally without --write", () => {
@@ -247,7 +275,9 @@ describe("CLI (infrax)", () => {
       assert.ok(stdout.includes("ephemeral"));
       assert.ok(stdout.includes("enabled rule:new-rule"));
 
-      const config = JSON.parse(fs.readFileSync(path.join(tempDir, "ai.config.jsonc"), "utf-8"));
+      const config = JSON.parse(
+        fs.readFileSync(path.join(tempDir, ".ai", "config.jsonc"), "utf-8")
+      );
       assert.ok(!config.enable.rules.includes("rule:new-rule"));
     });
 
@@ -256,7 +286,9 @@ describe("CLI (infrax)", () => {
 
       assert.strictEqual(exitCode, 0);
 
-      const config = JSON.parse(fs.readFileSync(path.join(tempDir, "ai.config.jsonc"), "utf-8"));
+      const config = JSON.parse(
+        fs.readFileSync(path.join(tempDir, ".ai", "config.jsonc"), "utf-8")
+      );
       assert.ok(config.enable.rules.includes("rule:new-rule"));
     });
 
@@ -265,7 +297,9 @@ describe("CLI (infrax)", () => {
 
       assert.strictEqual(exitCode, 0);
 
-      const config = JSON.parse(fs.readFileSync(path.join(tempDir, "ai.config.jsonc"), "utf-8"));
+      const config = JSON.parse(
+        fs.readFileSync(path.join(tempDir, ".ai", "config.jsonc"), "utf-8")
+      );
       assert.ok(config.disable.rules.includes("rule:existing"));
       assert.ok(!config.enable.rules.includes("rule:existing"));
     });
@@ -284,7 +318,11 @@ describe("CLI (infrax)", () => {
         version: 1,
         enable: { rules: ["rule:test"] },
       };
-      fs.writeFileSync(path.join(tempDir, "ai.config.jsonc"), JSON.stringify(config));
+      fs.mkdirSync(path.join(tempDir, ".ai"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, ".ai", "config.jsonc"),
+        JSON.stringify(config)
+      );
 
       const { stdout, exitCode } = runCli(["explain"], tempDir);
 
@@ -294,7 +332,11 @@ describe("CLI (infrax)", () => {
 
     it("outputs JSON with --json flag", () => {
       const config = { version: 1 };
-      fs.writeFileSync(path.join(tempDir, "ai.config.jsonc"), JSON.stringify(config));
+      fs.mkdirSync(path.join(tempDir, ".ai"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, ".ai", "config.jsonc"),
+        JSON.stringify(config)
+      );
 
       const { stdout, exitCode } = runCli(["explain", "--json"], tempDir);
 
@@ -309,7 +351,7 @@ describe("CLI (infrax)", () => {
     beforeEach(() => {
       const config = {
         version: 1,
-        include: { rulesDir: "ai/rules" },
+        include: { rulesDir: ".ai/rules" },
         enable: { rules: ["rule:test"] },
         imports: {
           agentsMd: {
@@ -319,11 +361,15 @@ describe("CLI (infrax)", () => {
           },
         },
       };
-      fs.writeFileSync(path.join(tempDir, "ai.config.jsonc"), JSON.stringify(config));
-
-      fs.mkdirSync(path.join(tempDir, "ai", "rules"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, ".ai"), { recursive: true });
       fs.writeFileSync(
-        path.join(tempDir, "ai", "rules", "test.md"),
+        path.join(tempDir, ".ai", "config.jsonc"),
+        JSON.stringify(config)
+      );
+
+      fs.mkdirSync(path.join(tempDir, ".ai", "rules"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, ".ai", "rules", "test.md"),
         "---\nid: rule:test\n---\n\nTest rule"
       );
 
