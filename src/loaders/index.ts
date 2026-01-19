@@ -63,28 +63,29 @@ export function resolvePresetPath(
   const packageName = versionMatch?.[1] ?? presetRef;
   const versionSpec = versionMatch?.[2];
 
-  // Try to resolve using Node resolution
-  try {
-    // Look for the package in node_modules
-    const packageJsonPath = require.resolve(`${packageName}/package.json`, {
-      paths: [basedir],
-    });
-    const packageDir = path.dirname(packageJsonPath);
+  // Try to find the package in node_modules (walk up directories)
+  let searchDir = basedir;
+  while (searchDir !== path.dirname(searchDir)) {
+    const candidatePath = path.join(searchDir, "node_modules", packageName);
+    const packageJsonPath = path.join(candidatePath, "package.json");
 
-    // Read version from package.json
-    const packageJson = JSON.parse(
-      fs.readFileSync(packageJsonPath, "utf-8")
-    ) as { version?: string };
+    if (fileExists(packageJsonPath)) {
+      const packageJson = JSON.parse(
+        fs.readFileSync(packageJsonPath, "utf-8")
+      ) as { version?: string };
 
-    return {
-      path: packageDir,
-      version: packageJson.version ?? versionSpec,
-    };
-  } catch {
-    throw new Error(
-      `Failed to resolve preset "${presetRef}". Make sure the package is installed.`
-    );
+      return {
+        path: candidatePath,
+        version: packageJson.version ?? versionSpec,
+      };
+    }
+
+    searchDir = path.dirname(searchDir);
   }
+
+  throw new Error(
+    `Failed to resolve preset "${presetRef}". Make sure the package is installed.`
+  );
 }
 
 /**

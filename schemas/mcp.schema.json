@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://switchboard.dev/schemas/mcp.schema.json",
+  "title": "Switchboard MCP Server Definition",
+  "description": "Schema for MCP server definition files",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^mcp:.+$",
+      "description": "Unique MCP server identifier (e.g., 'mcp:filesystem')"
+    },
+    "transport": {
+      "type": "string",
+      "enum": ["stdio", "http"],
+      "description": "Transport type for the MCP server"
+    },
+    "command": {
+      "type": "string",
+      "description": "Command to run (for stdio transport)"
+    },
+    "args": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Command arguments (for stdio transport). Supports ${repoRoot} and ${home} variables."
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Environment variables (for stdio transport)"
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Working directory (for stdio transport)"
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Server URL (for http transport)"
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "HTTP headers (for http transport)"
+    },
+    "selectors": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contexts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^context:.+$"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "override": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": ["id", "transport"],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "transport": {
+            "const": "stdio"
+          }
+        }
+      },
+      "then": {
+        "required": ["command"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "transport": {
+            "const": "http"
+          }
+        }
+      },
+      "then": {
+        "required": ["url"]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

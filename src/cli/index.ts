@@ -2,9 +2,11 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as readline from "node:readline";
 import { resolveConfig, explainResolution } from "../resolver/index.js";
 import { exportConfig, exportMcp } from "../exporters/index.js";
 import { loadRootConfig, loadFullRegistry } from "../loaders/index.js";
+import { importAgentsMd } from "../loaders/agents-md.js";
 import type {
   ExportTarget,
   McpExportTarget,
@@ -13,28 +15,42 @@ import type {
   AgentId,
   SkillId,
   McpServerId,
+  ExportResult,
 } from "../types/index.js";
 
 const VERSION = "0.1.0";
 
+// ANSI colors for terminal output
+const colors = {
+  reset: "\x1b[0m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  dim: "\x1b[2m",
+  bold: "\x1b[1m",
+};
+
 function printHelp() {
   console.log(`
-switchboard v${VERSION} - Portable, model-aware AI configuration
+${colors.bold}switchboard v${VERSION}${colors.reset} - Portable, model-aware AI configuration
 
-USAGE:
+${colors.bold}USAGE:${colors.reset}
   switchboard <command> [options]
 
-COMMANDS:
+${colors.bold}COMMANDS:${colors.reset}
+  init                 Initialize a new ai.config.jsonc in current directory
   resolve              Resolve configuration and output JSON
   list <type>          List items (rules, agents, skills, mcp)
   enable <id>          Enable an item (ephemeral unless --write)
   disable <id>         Disable an item (ephemeral unless --write)
-  export <target>      Export to tool format (cursor, copilot, claude, mcp)
+  export <target>      Export to tool format (cursor, copilot, claude, mcp, all)
   explain              Show resolution trace
-  check                Validate configuration
+  check                Validate configuration (add --exports to check generated files)
+  drift                Show differences between generated and committed exports
   help                 Show this help message
 
-OPTIONS:
+${colors.bold}OPTIONS:${colors.reset}
   --model <id>         Select model for resolution
   --context <id>       Select context for resolution
   --write              Persist changes to config / write export files
@@ -43,14 +59,19 @@ OPTIONS:
   --target <client>    MCP client target (vscode, cursor, claude-desktop, amazonq)
   --all                Show all items (not just active)
   --json               Output as JSON
+  --exports            Check that generated exports match committed files
 
-EXAMPLES:
+${colors.bold}EXAMPLES:${colors.reset}
+  switchboard init
   switchboard resolve --model anthropic:claude-3.5-sonnet
   switchboard list rules --all
   switchboard enable rule:testing --write
   switchboard export cursor --write
+  switchboard export all --write
   switchboard export mcp --target vscode --write
   switchboard export mcp --target claude-desktop --user --write --force
+  switchboard check --exports
+  switchboard drift
 `);
 }
 
@@ -121,6 +142,375 @@ function ensureDirectory(filePath: string) {
   }
 }
 
+function formatError(message: string, hint?: string): string {
+  let output = `${colors.red}Error:${colors.reset} ${message}`;
+  if (hint) {
+    output += `\n${colors.dim}Hint: ${hint}${colors.reset}`;
+  }
+  return output;
+}
+
+function formatWarning(message: string): string {
+  return `${colors.yellow}Warning:${colors.reset} ${message}`;
+}
+
+function formatSuccess(message: string): string {
+  return `${colors.green}✓${colors.reset} ${message}`;
+}
+
+/**
+ * Load AGENTS.md content based on config settings.
+ */
+function loadAgentsMdForExport(
+  repoRoot: string,
+  workingDir: string
+): { content?: string; includeIn?: "claude" | "all" | "none" } {
+  try {
+    const rootConfig = loadRootConfig(repoRoot);
+    const agentsMdConfig = rootConfig.imports?.agentsMd;
+
+    if (!agentsMdConfig?.enabled) {
+      return {};
+    }
+
+    const result = importAgentsMd(repoRoot, workingDir, {
+      enabled: agentsMdConfig.enabled,
+      mode: agentsMdConfig.mode,
+    });
+
+    if (!result) {
+      return {};
+    }
+
+    return {
+      content: result.content,
+      includeIn: agentsMdConfig.includeIn ?? "claude",
+    };
+  } catch {
+    // If config loading fails, just skip AGENTS.md
+    return {};
+  }
+}
+
+/**
+ * Generate all exports for comparison or writing.
+ */
+function generateAllExports(
+  repoRoot: string,
+  model?: string,
+  context?: string
+): ExportResult[] {
+  const resolved = resolveConfig({
+    repoRoot,
+    model,
+    context: context as `context:${string}` | undefined,
+  });
+
+  if (resolved.trace.errors.length > 0) {
+    throw new Error(
+      `Resolution errors:\n${resolved.trace.errors.map((e) => `  - ${e}`).join("\n")}`
+    );
+  }
+
+  // Load AGENTS.md content if configured
+  const agentsMd = loadAgentsMdForExport(repoRoot, process.cwd());
+
+  const results: ExportResult[] = [];
+
+  // Export all tool configs
+  results.push(
+    ...exportConfig(resolved, {
+      repoRoot,
+      targets: ["cursor", "copilot", "claude"],
+      agentsMdContent: agentsMd.content,
+      agentsMdIncludeIn: agentsMd.includeIn,
+    })
+  );
+
+  // Export MCP for VS Code (most common repo-level target)
+  results.push(
+    ...exportMcp(resolved, "vscode", {
+      repoRoot,
+      home: process.env.HOME ?? "",
+      userLevel: false,
+    })
+  );
+
+  return results;
+}
+
+/**
+ * Compare generated exports with existing files.
+ */
+function checkExports(repoRoot: string, model?: string, context?: string): {
+  matches: string[];
+  mismatches: Array<{ path: string; reason: string }>;
+  missing: string[];
+} {
+  const results = generateAllExports(repoRoot, model, context);
+
+  const matches: string[] = [];
+  const mismatches: Array<{ path: string; reason: string }> = [];
+  const missing: string[] = [];
+
+  for (const result of results) {
+    if (result.isUserLevel) continue; // Skip user-level configs
+
+    const fullPath = path.join(repoRoot, result.filePath);
+
+    if (!fs.existsSync(fullPath)) {
+      missing.push(result.filePath);
+      continue;
+    }
+
+    const existing = fs.readFileSync(fullPath, "utf-8");
+
+    // Normalize content for comparison (ignore timestamp differences)
+    const normalizeContent = (content: string): string => {
+      return content
+        .replace(/Generated at: .*$/gm, "Generated at: [TIMESTAMP]")
+        .replace(/"at": ".*"$/gm, '"at": "[TIMESTAMP]"')
+        .trim();
+    };
+
+    if (normalizeContent(existing) === normalizeContent(result.content)) {
+      matches.push(result.filePath);
+    } else {
+      mismatches.push({
+        path: result.filePath,
+        reason: "Content differs from generated output",
+      });
+    }
+  }
+
+  return { matches, mismatches, missing };
+}
+
+/**
+ * Show drift between generated and committed exports.
+ */
+function showDrift(repoRoot: string, model?: string, context?: string): void {
+  const results = generateAllExports(repoRoot, model, context);
+
+  let hasDrift = false;
+
+  for (const result of results) {
+    if (result.isUserLevel) continue;
+
+    const fullPath = path.join(repoRoot, result.filePath);
+
+    if (!fs.existsSync(fullPath)) {
+      console.log(`\n${colors.yellow}MISSING:${colors.reset} ${result.filePath}`);
+      console.log(`${colors.dim}  File does not exist. Run 'switchboard export' to create.${colors.reset}`);
+      hasDrift = true;
+      continue;
+    }
+
+    const existing = fs.readFileSync(fullPath, "utf-8");
+
+    // Simple line-by-line diff (excluding timestamps)
+    const existingLines = existing.split("\n");
+    const generatedLines = result.content.split("\n");
+
+    const diffs: Array<{ line: number; type: "add" | "remove"; content: string }> = [];
+
+    // Find differences (simple approach)
+    const maxLines = Math.max(existingLines.length, generatedLines.length);
+    for (let i = 0; i < maxLines; i++) {
+      const existingLine = existingLines[i] ?? "";
+      const generatedLine = generatedLines[i] ?? "";
+
+      // Skip timestamp lines
+      if (
+        existingLine.includes("Generated at:") ||
+        existingLine.includes('"at":') ||
+        generatedLine.includes("Generated at:") ||
+        generatedLine.includes('"at":')
+      ) {
+        continue;
+      }
+
+      if (existingLine !== generatedLine) {
+        if (existingLine) {
+          diffs.push({ line: i + 1, type: "remove", content: existingLine });
+        }
+        if (generatedLine) {
+          diffs.push({ line: i + 1, type: "add", content: generatedLine });
+        }
+      }
+    }
+
+    if (diffs.length > 0) {
+      console.log(`\n${colors.yellow}CHANGED:${colors.reset} ${result.filePath}`);
+      for (const diff of diffs.slice(0, 20)) {
+        // Limit to first 20 diffs
+        if (diff.type === "remove") {
+          console.log(`${colors.red}  - ${diff.content}${colors.reset}`);
+        } else {
+          console.log(`${colors.green}  + ${diff.content}${colors.reset}`);
+        }
+      }
+      if (diffs.length > 20) {
+        console.log(`${colors.dim}  ... and ${diffs.length - 20} more differences${colors.reset}`);
+      }
+      hasDrift = true;
+    }
+  }
+
+  if (!hasDrift) {
+    console.log(formatSuccess("All exports are up to date."));
+  }
+}
+
+/**
+ * Interactive init command.
+ */
+async function runInit(repoRoot: string): Promise<void> {
+  const configPath = path.join(repoRoot, "ai.config.jsonc");
+
+  if (fs.existsSync(configPath)) {
+    console.log(formatError(
+      "ai.config.jsonc already exists",
+      "Delete the existing file or run from a different directory"
+    ));
+    process.exit(1);
+  }
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const question = (prompt: string): Promise<string> =>
+    new Promise((resolve) => rl.question(prompt, resolve));
+
+  console.log(`\n${colors.bold}switchboard init${colors.reset}\n`);
+  console.log("This will create a new ai.config.jsonc and example files.\n");
+
+  const projectName = await question("Project name (for context): ");
+  const useTypeScript = (await question("Using TypeScript? (Y/n): ")).toLowerCase() !== "n";
+  const addMcp = (await question("Include MCP server examples? (Y/n): ")).toLowerCase() !== "n";
+
+  rl.close();
+
+  // Create directories
+  const dirs = ["ai/rules", "ai/agents", "ai/skills"];
+  if (addMcp) dirs.push("ai/mcp");
+  dirs.push("ai/contexts");
+
+  for (const dir of dirs) {
+    const fullDir = path.join(repoRoot, dir);
+    if (!fs.existsSync(fullDir)) {
+      fs.mkdirSync(fullDir, { recursive: true });
+    }
+  }
+
+  // Create config
+  const config = {
+    version: 1,
+    include: {
+      rulesDir: "ai/rules",
+      agentsDir: "ai/agents",
+      skillsDir: "ai/skills",
+      mcpDir: addMcp ? "ai/mcp" : undefined,
+      contextsDir: "ai/contexts",
+    },
+    defaults: {
+      context: `context:${projectName || "default"}` as const,
+    },
+    enable: {
+      rules: ["rule:code-style"] as `rule:${string}`[],
+      agents: ["agent:coding"] as `agent:${string}`[],
+      skills: [] as `skill:${string}`[],
+      mcpServers: [] as `mcp:${string}`[],
+    },
+    disable: {
+      rules: [] as `rule:${string}`[],
+      agents: [] as `agent:${string}`[],
+      skills: [] as `skill:${string}`[],
+      mcpServers: [] as `mcp:${string}`[],
+    },
+    policy: {
+      allowMissingDependencies: false,
+      allowOverrides: true,
+    },
+  };
+
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+  console.log(formatSuccess(`Created ${configPath}`));
+
+  // Create example rule
+  const ruleContent = `---
+id: rule:code-style
+targets: [cursor, copilot, claude]
+---
+
+## Code Style
+
+${useTypeScript ? "- Use TypeScript for all new code\n" : ""}- Write clean, readable code
+- Use meaningful variable and function names
+- Keep functions small and focused
+- Add comments for complex logic
+`;
+
+  fs.writeFileSync(path.join(repoRoot, "ai/rules/code-style.md"), ruleContent);
+  console.log(formatSuccess("Created ai/rules/code-style.md"));
+
+  // Create example agent
+  const agentContent = {
+    id: "agent:coding",
+    instructions: "You are a helpful coding assistant. Follow project conventions and best practices.",
+    rules: ["rule:code-style"],
+    skills: [],
+  };
+
+  fs.writeFileSync(
+    path.join(repoRoot, "ai/agents/coding.jsonc"),
+    JSON.stringify(agentContent, null, 2)
+  );
+  console.log(formatSuccess("Created ai/agents/coding.jsonc"));
+
+  // Create example context
+  const contextContent = {
+    id: `context:${projectName || "default"}`,
+    description: `${projectName || "Default"} project context`,
+    enable: {
+      rules: ["rule:code-style"],
+    },
+  };
+
+  fs.writeFileSync(
+    path.join(repoRoot, `ai/contexts/${projectName || "default"}.jsonc`),
+    JSON.stringify(contextContent, null, 2)
+  );
+  console.log(formatSuccess(`Created ai/contexts/${projectName || "default"}.jsonc`));
+
+  // Create example MCP server if requested
+  if (addMcp) {
+    const mcpContent = {
+      id: "mcp:filesystem",
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "${repoRoot}"],
+      env: {},
+    };
+
+    fs.writeFileSync(
+      path.join(repoRoot, "ai/mcp/filesystem.jsonc"),
+      JSON.stringify(mcpContent, null, 2)
+    );
+    console.log(formatSuccess("Created ai/mcp/filesystem.jsonc"));
+  }
+
+  console.log(`
+${colors.bold}Next steps:${colors.reset}
+  1. Edit ai/rules/*.md to add your project rules
+  2. Run ${colors.blue}switchboard check${colors.reset} to validate
+  3. Run ${colors.blue}switchboard export all --write${colors.reset} to generate tool configs
+  4. Commit the generated files to your repo
+`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const parsed = parseArgs(args);
@@ -142,9 +532,15 @@ async function main() {
   const force = parsed.flags.force === true;
   const all = parsed.flags.all === true;
   const json = parsed.flags.json === true;
+  const checkExportsFlag = parsed.flags.exports === true;
 
   try {
     switch (parsed.command) {
+      case "init": {
+        await runInit(process.cwd());
+        break;
+      }
+
       case "resolve": {
         const resolved = resolveConfig({
           repoRoot,
@@ -153,7 +549,7 @@ async function main() {
         });
 
         if (resolved.trace.errors.length > 0) {
-          console.error("Errors during resolution:");
+          console.error(formatError("Resolution failed"));
           for (const err of resolved.trace.errors) {
             console.error(`  - ${err}`);
           }
@@ -167,7 +563,10 @@ async function main() {
       case "list": {
         const type = parsed.positional[0];
         if (!type || !["rules", "agents", "skills", "mcp"].includes(type)) {
-          console.error("Usage: switchboard list <rules|agents|skills|mcp>");
+          console.error(formatError(
+            "Invalid list type",
+            "Usage: switchboard list <rules|agents|skills|mcp>"
+          ));
           process.exit(1);
         }
 
@@ -175,9 +574,8 @@ async function main() {
         const { registry, errors } = loadFullRegistry(repoRoot, rootConfig);
 
         if (errors.length > 0) {
-          console.error("Errors loading registry:");
           for (const err of errors) {
-            console.error(`  - ${err}`);
+            console.error(formatWarning(err));
           }
         }
 
@@ -229,11 +627,17 @@ async function main() {
         if (json) {
           console.log(JSON.stringify(items, null, 2));
         } else {
-          console.log(`\n${type.toUpperCase()} (${all ? "all" : "active"}):\n`);
-          for (const item of items) {
-            const status = activeIds.has(item.id) ? "[active]" : "[inactive]";
-            const source = item.source ? `(${item.source})` : "";
-            console.log(`  ${item.id} ${status} ${source}`);
+          console.log(`\n${colors.bold}${type.toUpperCase()}${colors.reset} (${all ? "all" : "active"}):\n`);
+          if (items.length === 0) {
+            console.log(`  ${colors.dim}No items found${colors.reset}`);
+          } else {
+            for (const item of items) {
+              const status = activeIds.has(item.id)
+                ? `${colors.green}[active]${colors.reset}`
+                : `${colors.dim}[inactive]${colors.reset}`;
+              const source = item.source ? `${colors.dim}(${item.source})${colors.reset}` : "";
+              console.log(`  ${item.id} ${status} ${source}`);
+            }
           }
           console.log("");
         }
@@ -244,42 +648,43 @@ async function main() {
       case "disable": {
         const id = parsed.positional[0];
         if (!id) {
-          console.error(`Usage: switchboard ${parsed.command} <id>`);
+          console.error(formatError(
+            "Missing item ID",
+            `Usage: switchboard ${parsed.command} <rule:id|agent:id|skill:id|mcp:id>`
+          ));
+          process.exit(1);
+        }
+
+        // Validate ID format
+        if (!id.match(/^(rule|agent|skill|mcp):.+$/)) {
+          console.error(formatError(
+            `Invalid ID format: "${id}"`,
+            "IDs must be prefixed with rule:, agent:, skill:, or mcp:"
+          ));
           process.exit(1);
         }
 
         if (!write) {
           // Ephemeral mode - just resolve with overlay
-          const overlay: EnableDisableSet =
-            parsed.command === "enable"
-              ? { rules: [], agents: [], skills: [], mcpServers: [] }
-              : { rules: [], agents: [], skills: [], mcpServers: [] };
+          const overlay: EnableDisableSet = {
+            rules: [],
+            agents: [],
+            skills: [],
+            mcpServers: [],
+          };
 
-          if (id.startsWith("rule:")) {
-            if (parsed.command === "enable") {
-              overlay.rules = [id as RuleId];
-            } else {
-              overlay.rules = [id as RuleId];
-            }
-          } else if (id.startsWith("agent:")) {
-            if (parsed.command === "enable") {
-              overlay.agents = [id as AgentId];
-            } else {
-              overlay.agents = [id as AgentId];
-            }
-          } else if (id.startsWith("skill:")) {
-            if (parsed.command === "enable") {
-              overlay.skills = [id as SkillId];
-            } else {
-              overlay.skills = [id as SkillId];
-            }
-          } else if (id.startsWith("mcp:")) {
-            if (parsed.command === "enable") {
-              overlay.mcpServers = [id as McpServerId];
-            } else {
-              overlay.mcpServers = [id as McpServerId];
-            }
-          }
+          const listKey = id.startsWith("rule:")
+            ? "rules"
+            : id.startsWith("agent:")
+              ? "agents"
+              : id.startsWith("skill:")
+                ? "skills"
+                : "mcpServers";
+
+          if (listKey === "rules") overlay.rules = [id as RuleId];
+          else if (listKey === "agents") overlay.agents = [id as AgentId];
+          else if (listKey === "skills") overlay.skills = [id as SkillId];
+          else overlay.mcpServers = [id as McpServerId];
 
           const cliOverlay =
             parsed.command === "enable"
@@ -294,10 +699,11 @@ async function main() {
           });
 
           console.log(
-            `[ephemeral] ${parsed.command}d ${id} (use --write to persist)`
+            `${colors.yellow}[ephemeral]${colors.reset} ${parsed.command}d ${id}`
           );
+          console.log(`${colors.dim}Use --write to persist this change${colors.reset}`);
           console.log(
-            `Active items after change: ${resolved.rules.length} rules, ${resolved.agents.length} agents, ${resolved.skills.length} skills, ${resolved.mcpServers.length} mcp servers`
+            `\nActive: ${resolved.rules.length} rules, ${resolved.agents.length} agents, ${resolved.skills.length} skills, ${resolved.mcpServers.length} mcp servers`
           );
         } else {
           // Write to config
@@ -309,8 +715,7 @@ async function main() {
 
           const content = fs.readFileSync(configPath, "utf-8");
 
-          // Simple approach: parse, modify, re-serialize
-          // In production, you'd want to use jsonc-parser's edit functions to preserve comments
+          // Parse with comment stripping
           const config = JSON.parse(
             content.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "")
           );
@@ -331,7 +736,6 @@ async function main() {
             if (!config.enable[listKey].includes(id)) {
               config.enable[listKey].push(id);
             }
-            // Remove from disable if present
             config.disable[listKey] = (config.disable[listKey] ?? []).filter(
               (x: string) => x !== id
             );
@@ -340,28 +744,28 @@ async function main() {
             if (!config.disable[listKey].includes(id)) {
               config.disable[listKey].push(id);
             }
-            // Remove from enable if present
             config.enable[listKey] = (config.enable[listKey] ?? []).filter(
               (x: string) => x !== id
             );
           }
 
           fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-          console.log(`[persisted] ${parsed.command}d ${id} in ${configPath}`);
+          console.log(formatSuccess(`${parsed.command}d ${id} in ${configPath}`));
         }
         break;
       }
 
       case "export": {
-        const target = parsed.positional[0] as ExportTarget | "mcp";
+        const target = parsed.positional[0] as ExportTarget | "mcp" | "all";
 
         if (
           !target ||
-          !["cursor", "copilot", "claude", "mcp"].includes(target)
+          !["cursor", "copilot", "claude", "mcp", "all"].includes(target)
         ) {
-          console.error(
-            "Usage: switchboard export <cursor|copilot|claude|mcp> [--target <client>] [--write]"
-          );
+          console.error(formatError(
+            "Invalid export target",
+            "Usage: switchboard export <cursor|copilot|claude|mcp|all> [--write]"
+          ));
           process.exit(1);
         }
 
@@ -372,22 +776,25 @@ async function main() {
         });
 
         if (resolved.trace.errors.length > 0) {
-          console.error("Errors during resolution:");
+          console.error(formatError("Resolution failed"));
           for (const err of resolved.trace.errors) {
             console.error(`  - ${err}`);
           }
           process.exit(1);
         }
 
-        let results;
+        let results: ExportResult[];
 
-        if (target === "mcp") {
+        if (target === "all") {
+          results = generateAllExports(repoRoot, model, context);
+        } else if (target === "mcp") {
           const mcpTarget = (parsed.flags.target as McpExportTarget) ?? "vscode";
 
           if (userLevel && write && !force) {
-            console.error(
-              "Error: Writing to user-level config requires --user --write --force"
-            );
+            console.error(formatError(
+              "User-level writes require explicit confirmation",
+              "Add --force to confirm: switchboard export mcp --target claude-desktop --user --write --force"
+            ));
             process.exit(1);
           }
 
@@ -397,14 +804,19 @@ async function main() {
             userLevel,
           });
         } else {
+          // Load AGENTS.md content if configured
+          const agentsMd = loadAgentsMdForExport(repoRoot, process.cwd());
+          
           results = exportConfig(resolved, {
             repoRoot,
             targets: [target],
+            agentsMdContent: agentsMd.content,
+            agentsMdIncludeIn: agentsMd.includeIn,
           });
         }
 
         if (results.length === 0) {
-          console.log("No items to export for this target.");
+          console.log(formatWarning("No items to export for this target."));
           break;
         }
 
@@ -416,11 +828,15 @@ async function main() {
 
             ensureDirectory(fullPath);
             fs.writeFileSync(fullPath, result.content);
-            console.log(`Wrote: ${fullPath}`);
+            console.log(formatSuccess(`Wrote ${fullPath}`));
           } else {
-            console.log(`\n--- ${result.filePath} ---`);
+            console.log(`\n${colors.bold}--- ${result.filePath} ---${colors.reset}`);
             console.log(result.content);
           }
+        }
+
+        if (!write) {
+          console.log(`\n${colors.dim}Add --write to write these files${colors.reset}`);
         }
         break;
       }
@@ -435,33 +851,41 @@ async function main() {
         if (json) {
           console.log(JSON.stringify(trace, null, 2));
         } else {
-          console.log("\n=== Resolution Trace ===\n");
+          console.log(`\n${colors.bold}=== Resolution Trace ===${colors.reset}\n`);
 
-          console.log("Layers:");
+          console.log(`${colors.bold}Layers:${colors.reset}`);
           for (const layer of trace.layers) {
-            const status = layer.enabled ? "enabled" : "disabled";
+            const status = layer.enabled
+              ? `${colors.green}enabled${colors.reset}`
+              : `${colors.dim}disabled${colors.reset}`;
             console.log(`  ${layer.layer}: ${status}`);
             if (layer.enabled && Object.keys(layer.applied).length > 0) {
-              console.log(`    applied: ${JSON.stringify(layer.applied)}`);
+              const applied = layer.applied;
+              if (applied.rules?.length) console.log(`    ${colors.dim}rules: ${applied.rules.join(", ")}${colors.reset}`);
+              if (applied.agents?.length) console.log(`    ${colors.dim}agents: ${applied.agents.join(", ")}${colors.reset}`);
+              if (applied.skills?.length) console.log(`    ${colors.dim}skills: ${applied.skills.join(", ")}${colors.reset}`);
+              if (applied.mcpServers?.length) console.log(`    ${colors.dim}mcp: ${applied.mcpServers.join(", ")}${colors.reset}`);
             }
           }
 
-          console.log("\nActivations:");
+          console.log(`\n${colors.bold}Activations:${colors.reset}`);
           for (const activation of trace.activations) {
-            console.log(
-              `  ${activation.id}: ${activation.enabled ? "enabled" : "disabled"} (${activation.reason})`
-            );
+            const status = activation.enabled
+              ? `${colors.green}enabled${colors.reset}`
+              : `${colors.dim}disabled${colors.reset}`;
+            console.log(`  ${activation.id}: ${status}`);
+            console.log(`    ${colors.dim}${activation.reason}${colors.reset}`);
           }
 
           if (trace.warnings.length > 0) {
-            console.log("\nWarnings:");
+            console.log(`\n${colors.yellow}Warnings:${colors.reset}`);
             for (const warning of trace.warnings) {
               console.log(`  - ${warning}`);
             }
           }
 
           if (trace.errors.length > 0) {
-            console.log("\nErrors:");
+            console.log(`\n${colors.red}Errors:${colors.reset}`);
             for (const error of trace.errors) {
               console.log(`  - ${error}`);
             }
@@ -481,39 +905,86 @@ async function main() {
         const hasWarnings = resolved.trace.warnings.length > 0;
 
         if (hasErrors) {
-          console.error("Configuration has errors:");
+          console.error(formatError("Configuration has errors:"));
           for (const err of resolved.trace.errors) {
             console.error(`  - ${err}`);
           }
         }
 
         if (hasWarnings) {
-          console.warn("Configuration has warnings:");
           for (const warning of resolved.trace.warnings) {
-            console.warn(`  - ${warning}`);
+            console.log(formatWarning(warning));
           }
         }
 
         if (!hasErrors && !hasWarnings) {
-          console.log("Configuration is valid.");
+          console.log(formatSuccess("Configuration is valid"));
           console.log(
             `  ${resolved.rules.length} rules, ${resolved.agents.length} agents, ${resolved.skills.length} skills, ${resolved.mcpServers.length} mcp servers`
           );
+        }
+
+        // Check exports if flag is set
+        if (checkExportsFlag) {
+          console.log(`\n${colors.bold}Checking exports...${colors.reset}`);
+
+          const { matches, mismatches, missing } = checkExports(repoRoot, model, context);
+
+          if (matches.length > 0) {
+            for (const match of matches) {
+              console.log(formatSuccess(`${match} is up to date`));
+            }
+          }
+
+          if (missing.length > 0) {
+            for (const file of missing) {
+              console.log(formatWarning(`${file} is missing (run 'switchboard export' to create)`));
+            }
+          }
+
+          if (mismatches.length > 0) {
+            for (const mismatch of mismatches) {
+              console.error(formatError(`${mismatch.path}: ${mismatch.reason}`));
+            }
+          }
+
+          if (mismatches.length > 0) {
+            console.error(`\n${formatError("Exports are out of sync", "Run 'switchboard export all --write' to update")}`);
+            process.exit(1);
+          }
         }
 
         process.exit(hasErrors ? 1 : 0);
         break;
       }
 
+      case "drift": {
+        console.log(`\n${colors.bold}Checking for drift...${colors.reset}\n`);
+        showDrift(repoRoot, model, context);
+        break;
+      }
+
       default:
-        console.error(`Unknown command: ${parsed.command}`);
-        printHelp();
+        console.error(formatError(
+          `Unknown command: "${parsed.command}"`,
+          "Run 'switchboard help' for available commands"
+        ));
         process.exit(1);
     }
   } catch (err) {
-    console.error(
-      `Error: ${err instanceof Error ? err.message : String(err)}`
-    );
+    const message = err instanceof Error ? err.message : String(err);
+
+    // Provide helpful hints based on error type
+    let hint: string | undefined;
+    if (message.includes("No configuration file found")) {
+      hint = "Run 'switchboard init' to create a new configuration";
+    } else if (message.includes("not found in registry")) {
+      hint = "Check that the ID is correct and the file exists in ai/";
+    } else if (message.includes("Failed to resolve preset")) {
+      hint = "Make sure the preset package is installed: pnpm add <preset>";
+    }
+
+    console.error(formatError(message, hint));
     process.exit(1);
   }
 }

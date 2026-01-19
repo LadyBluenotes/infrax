@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://switchboard.dev/schemas/skill.schema.json",
+  "title": "Switchboard Skill Definition",
+  "description": "Schema for skill definition files",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^skill:.+$",
+      "description": "Unique skill identifier (e.g., 'skill:fs-read')"
+    },
+    "grants": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Capabilities this skill grants (e.g., 'fs:read', 'fs:write', 'net', 'shell')"
+    },
+    "requiresMcpServers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^mcp:.+$"
+      },
+      "description": "MCP server IDs required by this skill"
+    },
+    "selectors": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contexts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^context:.+$"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "override": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": ["id", "grants"],
+  "additionalProperties": false
+}

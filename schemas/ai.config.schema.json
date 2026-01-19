@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://switchboard.dev/schemas/ai.config.schema.json",
+  "title": "Switchboard AI Configuration",
+  "description": "Configuration schema for switchboard - portable, model-aware AI configuration",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version (must be 1)"
+    },
+    "extends": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Presets to extend (npm packages like '@scope/preset@^1' or local paths like './presets/base')"
+    },
+    "include": {
+      "type": "object",
+      "description": "Directory paths for configuration files",
+      "properties": {
+        "rulesDir": {
+          "type": "string",
+          "default": "ai/rules",
+          "description": "Directory containing rule files (*.md)"
+        },
+        "agentsDir": {
+          "type": "string",
+          "default": "ai/agents",
+          "description": "Directory containing agent definitions (*.jsonc)"
+        },
+        "skillsDir": {
+          "type": "string",
+          "default": "ai/skills",
+          "description": "Directory containing skill definitions (*.jsonc)"
+        },
+        "mcpDir": {
+          "type": "string",
+          "default": "ai/mcp",
+          "description": "Directory containing MCP server definitions (*.jsonc)"
+        },
+        "contextsDir": {
+          "type": "string",
+          "default": "ai/contexts",
+          "description": "Directory containing context definitions (*.jsonc)"
+        },
+        "modelsDir": {
+          "type": "string",
+          "default": "ai/models",
+          "description": "Directory containing model definitions (*.jsonc)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "defaults": {
+      "type": "object",
+      "description": "Default selections",
+      "properties": {
+        "context": {
+          "type": "string",
+          "pattern": "^context:.+$",
+          "description": "Default context to use (e.g., 'context:node-typescript')"
+        },
+        "model": {
+          "type": "string",
+          "description": "Default model to use (e.g., 'anthropic:claude-3.5-sonnet')"
+        },
+        "agent": {
+          "type": "string",
+          "pattern": "^agent:.+$",
+          "description": "Default agent to use (e.g., 'agent:coding')"
+        }
+      },
+      "additionalProperties": false
+    },
+    "layers": {
+      "type": "object",
+      "description": "Enable/disable resolution layers",
+      "properties": {
+        "base": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "model": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "cli": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "enable": {
+      "$ref": "#/$defs/enableDisableSet",
+      "description": "Items to enable (allow-list)"
+    },
+    "disable": {
+      "$ref": "#/$defs/enableDisableSet",
+      "description": "Items to explicitly disable"
+    },
+    "imports": {
+      "type": "object",
+      "description": "Import settings for external files",
+      "properties": {
+        "agentsMd": {
+          "type": "object",
+          "description": "Settings for importing AGENTS.md",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether to import AGENTS.md content"
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["nearest-wins", "repo-root-only"],
+              "default": "nearest-wins",
+              "description": "How to resolve AGENTS.md files"
+            },
+            "includeIn": {
+              "type": "string",
+              "enum": ["claude", "all", "none"],
+              "default": "claude",
+              "description": "Which exports to include AGENTS.md content in"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "export": {
+      "type": "object",
+      "description": "Export policy settings",
+      "properties": {
+        "repo": {
+          "type": "object",
+          "properties": {
+            "write": {
+              "type": "boolean",
+              "default": true,
+              "description": "Allow writing repo-level exports"
+            }
+          },
+          "additionalProperties": false
+        },
+        "user": {
+          "type": "object",
+          "properties": {
+            "write": {
+              "type": "boolean",
+              "default": false,
+              "description": "Allow writing user-level exports (requires --force)"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "policy": {
+      "type": "object",
+      "description": "Policy settings for resolution",
+      "properties": {
+        "allowMissingDependencies": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow resolution to succeed even if referenced items are missing"
+        },
+        "allowOverrides": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow items to override definitions from presets"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["version"],
+  "$defs": {
+    "enableDisableSet": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^rule:.+$"
+          },
+          "description": "Rule IDs (e.g., 'rule:code-style')"
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^agent:.+$"
+          },
+          "description": "Agent IDs (e.g., 'agent:coding')"
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^skill:.+$"
+          },
+          "description": "Skill IDs (e.g., 'skill:fs-read')"
+        },
+        "mcpServers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^mcp:.+$"
+          },
+          "description": "MCP Server IDs (e.g., 'mcp:filesystem')"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://switchboard.dev/schemas/ai.preset.schema.json",
+  "title": "Switchboard Preset Manifest",
+  "description": "Manifest schema for switchboard presets",
+  "type": "object",
+  "properties": {
+    "presetVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Preset schema version (must be 1)"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^preset:.+$",
+      "description": "Unique preset identifier (e.g., 'preset:company-base')"
+    },
+    "include": {
+      "type": "object",
+      "description": "Directory paths for configuration files",
+      "properties": {
+        "rulesDir": {
+          "type": "string",
+          "default": "ai/rules"
+        },
+        "agentsDir": {
+          "type": "string",
+          "default": "ai/agents"
+        },
+        "skillsDir": {
+          "type": "string",
+          "default": "ai/skills"
+        },
+        "mcpDir": {
+          "type": "string",
+          "default": "ai/mcp"
+        },
+        "contextsDir": {
+          "type": "string",
+          "default": "ai/contexts"
+        },
+        "modelsDir": {
+          "type": "string",
+          "default": "ai/models"
+        }
+      },
+      "additionalProperties": false
+    },
+    "defaults": {
+      "type": "object",
+      "description": "Default enable/disable suggestions",
+      "properties": {
+        "enable": {
+          "$ref": "ai.config.schema.json#/$defs/enableDisableSet"
+        },
+        "disable": {
+          "$ref": "ai.config.schema.json#/$defs/enableDisableSet"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["presetVersion", "id"],
+  "additionalProperties": false
+}

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://switchboard.dev/schemas/context.schema.json",
+  "title": "Switchboard Context Definition",
+  "description": "Schema for context definition files (project profiles)",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^context:.+$",
+      "description": "Unique context identifier (e.g., 'context:node-typescript')"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of this context"
+    },
+    "enable": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^rule:.+$"
+          }
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^agent:.+$"
+          }
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^skill:.+$"
+          }
+        },
+        "mcpServers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^mcp:.+$"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "disable": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^rule:.+$"
+          }
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^agent:.+$"
+          }
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^skill:.+$"
+          }
+        },
+        "mcpServers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^mcp:.+$"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "overrides": {
+      "type": "object",
+      "description": "Overrides to apply when this context is active",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["id"],
+  "additionalProperties": false
+}

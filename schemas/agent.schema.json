@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://switchboard.dev/schemas/agent.schema.json",
+  "title": "Switchboard Agent Definition",
+  "description": "Schema for agent definition files",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^agent:.+$",
+      "description": "Unique agent identifier (e.g., 'agent:coding')"
+    },
+    "instructions": {
+      "type": "string",
+      "description": "Base instructions for the agent"
+    },
+    "variants": {
+      "type": "array",
+      "description": "Model-specific instruction variants",
+      "items": {
+        "type": "object",
+        "properties": {
+          "when": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string",
+                "description": "Model pattern to match (e.g., 'anthropic:claude-3.5-sonnet')"
+              },
+              "modelFamily": {
+                "type": "string",
+                "description": "Model family pattern to match (e.g., 'anthropic:*')"
+              }
+            },
+            "additionalProperties": false
+          },
+          "append": {
+            "type": "string",
+            "description": "Content to append to instructions"
+          },
+          "prepend": {
+            "type": "string",
+            "description": "Content to prepend to instructions"
+          },
+          "replace": {
+            "type": "string",
+            "description": "Content to replace instructions entirely"
+          }
+        },
+        "required": ["when"],
+        "additionalProperties": false
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^rule:.+$"
+      },
+      "description": "Rule IDs this agent includes"
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^skill:.+$"
+      },
+      "description": "Skill IDs this agent uses"
+    },
+    "mcpServers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^mcp:.+$"
+      },
+      "description": "MCP server IDs this agent requires directly"
+    },
+    "selectors": {
+      "$ref": "#/$defs/selectors"
+    },
+    "override": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this definition overrides one from a preset"
+    }
+  },
+  "required": ["id"],
+  "$defs": {
+    "selectors": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Model patterns this item applies to"
+        },
+        "contexts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^context:.+$"
+          },
+          "description": "Context IDs this item applies to"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -54,7 +54,10 @@ function filterRulesForTarget(
 // Cursor Exporter
 // -----------------------------------------------------------------------------
 
-export function exportCursor(resolved: ResolvedConfig): ExportResult[] {
+export function exportCursor(
+  resolved: ResolvedConfig,
+  _options?: { agentsMdContent?: string }
+): ExportResult[] {
   const results: ExportResult[] = [];
   const rules = filterRulesForTarget(resolved.rules, "cursor");
 
@@ -83,18 +86,27 @@ ${rule.content}
 // Copilot Exporter
 // -----------------------------------------------------------------------------
 
-export function exportCopilot(resolved: ResolvedConfig): ExportResult[] {
+export function exportCopilot(
+  resolved: ResolvedConfig,
+  options?: { agentsMdContent?: string; includeAgentsMd?: boolean }
+): ExportResult[] {
   const rules = filterRulesForTarget(resolved.rules, "copilot");
 
-  if (rules.length === 0) {
+  if (rules.length === 0 && !options?.agentsMdContent) {
     return [];
   }
 
   const header = generateHeader(resolved, "markdown");
-  const content =
-    header +
-    "# Copilot Instructions\n\n" +
-    rules.map((rule) => rule.content).join("\n\n---\n\n");
+  let content = header + "# Copilot Instructions\n\n";
+
+  // Add AGENTS.md content if configured
+  if (options?.includeAgentsMd && options?.agentsMdContent) {
+    content += "## Project Context (from AGENTS.md)\n\n";
+    content += options.agentsMdContent;
+    content += "\n\n---\n\n";
+  }
+
+  content += rules.map((rule) => rule.content).join("\n\n---\n\n");
 
   return [
     {
@@ -110,16 +122,27 @@ export function exportCopilot(resolved: ResolvedConfig): ExportResult[] {
 // Claude Exporter
 // -----------------------------------------------------------------------------
 
-export function exportClaude(resolved: ResolvedConfig): ExportResult[] {
+export function exportClaude(
+  resolved: ResolvedConfig,
+  options?: { agentsMdContent?: string; includeAgentsMd?: boolean }
+): ExportResult[] {
   const rules = filterRulesForTarget(resolved.rules, "claude");
 
-  if (rules.length === 0) {
+  if (rules.length === 0 && !options?.agentsMdContent) {
     return [];
   }
 
   const header = generateHeader(resolved, "markdown");
-  const content =
-    header + rules.map((rule) => rule.content).join("\n\n---\n\n");
+  let content = header;
+
+  // Add AGENTS.md content first if configured
+  if (options?.includeAgentsMd && options?.agentsMdContent) {
+    content += "## Project Context (from AGENTS.md)\n\n";
+    content += options.agentsMdContent;
+    content += "\n\n---\n\n";
+  }
+
+  content += rules.map((rule) => rule.content).join("\n\n---\n\n");
 
   return [
     {
@@ -277,6 +300,10 @@ export interface ExportOptions {
   targets?: ExportTarget[];
   mcpTargets?: McpExportTarget[];
   userLevel?: boolean;
+  /** AGENTS.md content to include in exports */
+  agentsMdContent?: string;
+  /** Which targets should include AGENTS.md content */
+  agentsMdIncludeIn?: "claude" | "all" | "none";
 }
 
 export function exportConfig(
@@ -287,17 +314,36 @@ export function exportConfig(
   const home = options.home ?? process.env.HOME ?? "";
 
   const targets = options.targets ?? ["cursor", "copilot", "claude"];
+  const agentsMdIncludeIn = options.agentsMdIncludeIn ?? "claude";
 
   for (const target of targets) {
+    const includeAgentsMd =
+      agentsMdIncludeIn === "all" ||
+      (agentsMdIncludeIn === "claude" && target === "claude");
+
     switch (target) {
       case "cursor":
-        results.push(...exportCursor(resolved));
+        results.push(
+          ...exportCursor(resolved, {
+            agentsMdContent: options.agentsMdContent,
+          })
+        );
         break;
       case "copilot":
-        results.push(...exportCopilot(resolved));
+        results.push(
+          ...exportCopilot(resolved, {
+            agentsMdContent: options.agentsMdContent,
+            includeAgentsMd: includeAgentsMd && agentsMdIncludeIn === "all",
+          })
+        );
         break;
       case "claude":
-        results.push(...exportClaude(resolved));
+        results.push(
+          ...exportClaude(resolved, {
+            agentsMdContent: options.agentsMdContent,
+            includeAgentsMd,
+          })
+        );
         break;
       case "mcp":
         // MCP handled separately via mcpTargets

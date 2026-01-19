@@ -1,11 +1,6 @@
 {
-  // switchboard configuration
+  "$schema": "../../schemas/ai.config.schema.json",
   "version": 1,
-
-  // Optional: extend from presets (npm packages or local paths)
-  // "extends": ["@company/ai-preset-base@^1", "./local-preset"],
-
-  // Directory includes (defaults shown)
   "include": {
     "rulesDir": "ai/rules",
     "agentsDir": "ai/agents",
@@ -14,21 +9,23 @@
     "contextsDir": "ai/contexts",
     "modelsDir": "ai/models"
   },
-
-  // Defaults
   "defaults": {
     "context": "context:node-typescript"
   },
-
-  // Layer toggles
   "layers": {
-    "base": { "enabled": true },
-    "context": { "enabled": true },
-    "model": { "enabled": true },
-    "cli": { "enabled": true }
+    "base": {
+      "enabled": true
+    },
+    "context": {
+      "enabled": true
+    },
+    "model": {
+      "enabled": true
+    },
+    "cli": {
+      "enabled": true
+    }
   },
-
-  // Allow-list: what is enabled (strict allow-list only)
   "enable": {
     "rules": [
       "rule:code-style",
@@ -46,18 +43,21 @@
       "mcp:filesystem"
     ]
   },
-
-  // Explicit disables (takes precedence over enable)
   "disable": {
     "rules": [],
     "agents": [],
     "skills": [],
     "mcpServers": []
   },
-
-  // Policy settings
   "policy": {
     "allowMissingDependencies": false,
     "allowOverrides": true
+  },
+  "imports": {
+    "agentsMd": {
+      "enabled": true,
+      "mode": "repo-root-only",
+      "includeIn": "claude"
+    }
   }
 }
